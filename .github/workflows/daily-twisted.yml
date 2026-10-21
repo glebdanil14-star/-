@@ -29,10 +29,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Pillow (for the art card)
+        run: pip install pillow
+
       - name: Send twisted of the day
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PINTEREST_USER: ${{ vars.PINTEREST_USER }}
         run: python bot.py ${{ inputs.force && '--force' || '' }}
 
       - name: Save state
