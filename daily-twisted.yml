@@ -1,0 +1,46 @@
+name: Twisted of the Day
+
+on:
+  schedule:
+    # Каждый час с 00:15 до 06:15 UTC. Бот отправит сообщение один раз —
+    # как только вики обновится, остальные запуски просто завершатся.
+    - cron: "15 0-6 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Отправить сообщение, даже если сегодня уже отправляли"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: twisted-of-the-day
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Send twisted of the day
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot.py ${{ inputs.force && '--force' || '' }}
+
+      - name: Save state
+        run: |
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "Update twisted of the day"
+            git push
+          fi
