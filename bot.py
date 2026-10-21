@@ -224,8 +224,8 @@ def main() -> int:
         print(text)
         return 0
 
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    token = os.environ.get("8910088904:AAF4C70nNHMDspz8WNlxuGDF1uFbkfiVG4c")
+    chat_id = os.environ.get("@DandysWorldPois")
     if not token or not chat_id:
         print("[error] Не заданы TELEGRAM_BOT_TOKEN и/или TELEGRAM_CHAT_ID", file=sys.stderr)
         return 1
