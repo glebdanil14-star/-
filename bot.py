@@ -127,52 +127,151 @@ def get_current_twisted() -> str | None:
     return None
 
 
+# ---------- русские имена и эмодзи ----------
+# Английское имя с вики → (русское имя, эмодзи).
+# Если появится новый твистед, которого тут нет, бот напишет английское имя и 🖤.
+# Можно спокойно править: имена и эмодзи — на твой вкус.
+TOONS = {
+    "Astro": ("Астро", "🌙"),
+    "Bassie": ("Басси", "🧺"),
+    "Blot": ("Блот", "🖋️"),
+    "Bobette": ("Бобетт", "🎄"),
+    "Boxten": ("Бокстен", "📦"),
+    "Brightney": ("Брайтни", "💡"),
+    "Brusha": ("Бруша", "🖌️"),
+    "Coal": ("Коул", "🪨"),
+    "Cocoa": ("Коко", "☕"),
+    "Connie": ("Конни", "🍦"),
+    "Cosmo": ("Космо", "🥐"),
+    "Dandy": ("Денди", "🌼"),
+    "Dyle": ("Дайл", "🕰️"),
+    "Eclipse": ("Эклипс", "🌑"),
+    "Eggson": ("Эггсон", "🥚"),
+    "Finn": ("Финн", "🐟"),
+    "Flutter": ("Флаттер", "🦋"),
+    "Flyte": ("Флайт", "🪽"),
+    "Gigi": ("Гиги", "🎰"),
+    "Ginger": ("Джинджер", "🍪"),
+    "Glisten": ("Глистен", "🪞"),
+    "Goob": ("Губ", "🧸"),
+    "Gourdy": ("Гурди", "🎃"),
+    "Looey": ("Луи", "🎈"),
+    "Pebble": ("Пебл", "🐶"),
+    "Poppy": ("Поппи", "🌺"),
+    "Razzle & Dazzle": ("Раззл и Даззл", "🎭"),
+    "Ribecca": ("Рибекка", "🎀"),
+    "Rodger": ("Роджер", "🔍"),
+    "Rudie": ("Руди", "🦌"),
+    "Scraps": ("Скрапс", "✂️"),
+    "Shelly": ("Шелли", "🦕"),
+    "Shrimpo": ("Шримпо", "🦐"),
+    "Soulvester": ("Соулвестер", "👻"),
+    "Sprout": ("Спраут", "🍓"),
+    "Squirm": ("Сквирм", "🐛"),
+    "Teagan": ("Тиган", "🫖"),
+    "Tisha": ("Тиша", "🧻"),
+    "Toodles": ("Тудлс", "🐾"),
+    "Vee": ("Ви", "📺"),
+    "Yatta": ("Ятта", "🎉"),
+}
+
+MONTHS_RU = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+]
+
+
+def ru_toon(name: str) -> tuple[str, str]:
+    """Возвращает (русское имя, эмодзи). Ищет без учёта регистра и 'and' вместо '&'."""
+    key = name.replace(" and ", " & ").strip().lower()
+    for eng, value in TOONS.items():
+        if eng.lower() == key:
+            return value
+    print(f"[warn] Нет русского имени для «{name}» — добавь его в TOONS", file=sys.stderr)
+    return name, "🖤"
+
+
 # ---------- сообщение и отправка ----------
 
 def build_message(name: str, now_utc: datetime) -> str:
     next_reset = (now_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     tz_name = os.environ.get("LOCAL_TZ", "Europe/Moscow")
     tz_label = os.environ.get("LOCAL_TZ_LABEL", "МСК")
-    local_part = ""
+
+    reset_text = "00:00 UTC"
     if ZoneInfo is not None:
         try:
             local = next_reset.astimezone(ZoneInfo(tz_name))
-            local_part = f" / {local:%H:%M} {tz_label}"
+            reset_text = f"{local:%H:%M} {tz_label}"
         except Exception:
             pass
 
-    page = urllib.parse.quote(f"Twisted_{name.replace(' ', '_')}")
-    wiki_link = f"{WIKI}/wiki/{page}"
-    safe_name = html.escape(name)
+    ru_name, emoji = ru_toon(name)
+    date_text = f"{now_utc.day} {MONTHS_RU[now_utc.month - 1]}"
 
     return (
-        "🎲 <b>Твистед дня в Dandy's World</b>\n\n"
-        f"Сегодня на доске: <b>Twisted {safe_name}</b>\n"
-        "Шанс встретить его на этажах повышен.\n\n"
-        f"⏰ Доска сменится в 00:00 UTC{local_part}\n"
-        f'📖 <a href="{wiki_link}">Twisted {safe_name} на вики</a>'
+        "🎲 <b>DANDY'S WORLD · ТВИСТЕД ДНЯ</b>\n"
+        "━━━━━━━━━━━━━━━━\n\n"
+        f"{emoji} <b>Твистед {html.escape(ru_name)}</b>\n"
+        f"<i>Twisted {html.escape(name)}</i>\n\n"
+        "<blockquote>📈 Весь день этот твистед будет попадаться на этажах чаще обычного. "
+        "Самое время добить исследование!</blockquote>\n\n"
+        f"📅 {date_text}\n"
+        f"⏳ Смена доски в <b>{reset_text}</b>"
     )
 
 
-def send_telegram(token: str, chat_id: str, text: str) -> None:
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    body = urllib.parse.urlencode(
-        {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": "true",
-        }
-    ).encode("utf-8")
+def telegram(token: str, method: str, params: dict):
+    """Вызывает метод Telegram Bot API и возвращает поле result."""
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    body = urllib.parse.urlencode(params).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         details = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Telegram ответил ошибкой {e.code}: {details}") from None
+        raise RuntimeError(f"Telegram ({method}) ответил ошибкой {e.code}: {details}") from None
     if not result.get("ok"):
-        raise RuntimeError(f"Telegram не принял сообщение: {result}")
+        raise RuntimeError(f"Telegram ({method}) не принял запрос: {result}")
+    return result.get("result")
+
+
+def send_telegram(token: str, chat_id: str, text: str) -> int:
+    """Отправляет сообщение и возвращает его message_id."""
+    msg = telegram(
+        token,
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        },
+    )
+    return msg["message_id"]
+
+
+def repin(token: str, chat_id: str, new_id: int, old_id: int | None) -> None:
+    """Закрепляет новое сообщение и открепляет вчерашнее.
+    Ошибки только печатаются: сообщение уже отправлено, из-за закрепа не падаем."""
+    try:
+        # disable_notification — без лишнего уведомления «бот закрепил сообщение»
+        telegram(token, "pinChatMessage",
+                 {"chat_id": chat_id, "message_id": new_id, "disable_notification": "true"})
+        print(f"[ok] Закрепил сообщение {new_id}")
+    except Exception as e:
+        print(f"[warn] Не смог закрепить: {e}\n"
+              "       Проверь, что у бота есть право закреплять/редактировать сообщения.",
+              file=sys.stderr)
+        return  # старое не трогаем, чтобы в канале остался хоть какой-то закреп
+
+    if old_id and old_id != new_id:
+        try:
+            telegram(token, "unpinChatMessage", {"chat_id": chat_id, "message_id": old_id})
+            print(f"[ok] Открепил старое сообщение {old_id}")
+        except Exception as e:
+            print(f"[warn] Не смог открепить старое сообщение {old_id}: {e}", file=sys.stderr)
 
 
 # ---------- состояние (чтобы не слать дважды) ----------
@@ -230,9 +329,13 @@ def main() -> int:
         print("[error] Не заданы TELEGRAM_BOT_TOKEN и/или TELEGRAM_CHAT_ID", file=sys.stderr)
         return 1
 
-    send_telegram(token, chat_id, text)
-    save_state({"date": today, "twisted": name})
-    print(f"[ok] Отправил: Twisted {name}")
+    message_id = send_telegram(token, chat_id, text)
+    # Сохраняем сразу после отправки, чтобы при сбое закрепа не отправить второй раз
+    save_state({"date": today, "twisted": name, "message_id": message_id})
+    print(f"[ok] Отправил: Twisted {name} (сообщение {message_id})")
+
+    if os.environ.get("PIN_MESSAGE", "1") != "0":
+        repin(token, chat_id, message_id, state.get("message_id"))
     return 0
 
 
